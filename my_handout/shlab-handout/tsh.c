@@ -484,7 +484,7 @@ void sigtstp_handler(int sig) {
     sigfillset(&mask);
     if(pid){
         sigprocmask(SIG_BLOCK, &mask, &prev);
-        printf("Job [%d] (%d) terminated by signal 20\n",jid,pid);
+        printf("Job [%d] (%d) stopped by signal 20\n",jid,pid);
         (*getjobpid(jobs,pid)).state = ST;      //设置job状态为stop
         sigprocmask(SIG_SETMASK, &prev, NULL);
     }
