@@ -17,9 +17,15 @@
 > sigint_handler()：捕获SIGINT信号；[ctrl + C]
 >
 > sigtstp_handler()：捕获SIGTSTP信号；[ctrl + Z]
+<<<<<<< HEAD
 
 &nbsp;
 
+====
+&nbsp; 
+&nbsp; 
+
+>>>>>>> 6945cef9b496d88c42dc6174b57542ac30863ca4
 ##### 1.2 Basic Unix Operation
 
 **1. 在指令末尾 + &：代表将指令丢到后台bg中，此时bash会给予这个指令一个job number**
@@ -33,6 +39,7 @@
 **3. jobs：观察目前后台bg下的所有工作状态** 
 
 ![image-20211130151259472](images/image-20211130151259472.png)
+&nbsp; 
 
 **4.  fg/bg：将后台工作拿到前台/前台处理**
 
@@ -42,14 +49,16 @@ bg + %job_number : 将vim程序放入后台处理（上例）
 ```
 
 ![image-20211130151827722](images/image-20211130151827722.png)
-
+&nbsp; 
 **5. 显示所有允许着的进程**
 
 静态：ps aux
 
 动态：top
 
-​    
+
+&nbsp; 
+&nbsp; 
 
 ##### 1.3 **General Overview of Unix Shells**
 
@@ -57,9 +66,7 @@ bg + %job_number : 将vim程序放入后台处理（上例）
 
 规定2：如果是内置命令，立即执行，否则将其视为可执行文件的路径名；
 
-规定3：运行可执行文件时，shell分叉一个子进程，然后在子进程的上下文中加载并运行该程序
-
-​			 通过解释单个命令行而创建的子进程统称为作业；
+规定3：运行可执行文件时，shell分叉一个子进程，然后在子进程的上下文中加载并运行该程序；通过解释单个命令行而创建的子进程统称为作业；
 
 规定4：一个作业可以由由Unix管道连接的多个子进程组成；以&结尾的，放入后台；
 
@@ -83,7 +90,8 @@ fg <job>: Change a stopped or running background job to a running in the 						f
 kill <job>: Terminate a job
 ```
 
-  
+  &nbsp; 
+  &nbsp; 
 
 ##### 1.4  Specification实验要求
 
@@ -108,7 +116,7 @@ the background. The <job> argument can be either a PID or a JID.
 the foreground. The <job> argument can be either a PID or a JID
 
 
-
+&nbsp; 
 eval函数的实现
 
 > * eval - Evaluate the command line that the user has just typed in
@@ -174,7 +182,7 @@ void eval(char *cmdline) {
 ```
 
 
-
+&nbsp; 
 builtin_cmd函数的实现
 
 > builtin_cmd - If the user has typed a built-in command then execute it immediately. 
@@ -198,7 +206,7 @@ int builtin_cmd(char **argv)        //当是shell内置命令时，执行它自�
 }
 ```
 
-
+&nbsp; 
 
 do_bgfg函数的实现
 
@@ -270,7 +278,7 @@ void do_bgfg(char **argv) {
     return;
 }
 ```
-
+&nbsp; 
 
 
 waitfg函数的实现
@@ -292,7 +300,7 @@ void waitfg(pid_t pid)      // 目的：在进程处于前台期间，可以被�
 ```
 
 
-
+&nbsp; 
 sigchld_handler的实现
 
 > sigchld_handler：The kernel sends a SIGCHLD to the shell whenever
@@ -345,7 +353,7 @@ void sigchld_handler(int sig) //reap the zombie child: 回收所有的terminate�
 
 
 
-
+&nbsp; 
 
 sigint_handler的实现
 
@@ -375,7 +383,7 @@ void sigint_handler(int sig) {
 
 
 
-
+&nbsp; 
 sigtstp_handler的实现
 
 > The kernel sends a SIGTSTP to the shell whenever the user types ctrl-z at the keyboard. Catch it and suspend the foreground job by sending it a SIGTSTP.
@@ -402,7 +410,7 @@ void sigtstp_handler(int sig) {
 }
 ```
 
-
+&nbsp; 
 
 
 
@@ -448,7 +456,8 @@ fg %num:
 	%jobid: No such job
 	空
 ```
-
+&nbsp; 
+&nbsp; 
 关于sscanf()函数：
 
 ```cpp
@@ -465,7 +474,8 @@ sscanf(str,"%d %[a-z]", &num, lowercase);
 //同理，带有%num
 sscanf(str,"%%%d", &num);
 ```
-
+&nbsp; 
+&nbsp; 
 关于kill()传递信号函数：
 
 > 函数说明：kill(pid, sig_num)可以用来送参数sig 指定的信号给参数pid 指定的进程。参数pid 有几种情况：
@@ -479,9 +489,9 @@ sscanf(str,"%%%d", &num);
 > 4、**pid<0** 将信号传给**进程组**识别码为pid 绝对值的**所有进程参数** sig 代表的信号编号可参考附录D
 
 
+&nbsp; 
 
-
-
+&nbsp; 
 写一个快速测试所有样例的脚本：
 
 单元测试: ./execute.sh 01~16
@@ -505,8 +515,8 @@ else
 	cat my_result.txt
 fi
 ```
-
-
+&nbsp; 
+&nbsp; 
 
 所有样例一起跑	  ./execute.sh
 
@@ -544,9 +554,9 @@ do
 done
 ```
 
-
-
-
+&nbsp; 
+&nbsp; 
+&nbsp; 
 
 Reference: 
 
