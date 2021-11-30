@@ -1,1 +1,1 @@
-./sdriver.pl -t trace08.txt -s ./tshref -a "-p"
+./sdriver.pl -t trace08.txt -s ./tshref -a "-p" 
