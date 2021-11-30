@@ -109,9 +109,298 @@ the foreground. The <job> argument can be either a PID or a JID
 
 
 
+eval函数的实现
+
+> * eval - Evaluate the command line that the user has just typed in
+> * If the user has requested a built-in command (quit, jobs, bg or fg)
+> * then execute it immediately. Otherwise, fork a child process and
+> * run the job in the context of the child. If the job is running in
+> * the foreground, wait for it to terminate and then return.  Note:
+> * each child process must have a unique process group ID so that our
+> * background children don't receive SIGINT (SIGTSTP) from the kernel
+> * when we type ctrl-c (ctrl-z) at the keyboard. 
+
+```c
+void eval(char *cmdline) {
+    char *argv[MAXARGS];
+    char buf[MAXLINE];      //作为cmdline的一个缓存
+    int bg;
+    pid_t pid;
+    sigset_t mask;          //记录signal信号的集合
+
+    strcpy(buf, cmdline);
+    bg = parseline(buf, argv);      //分割字符串并确定是否要运行在后台, bg=1：后台执行
+    if (argv[0] == NULL)
+        return;
+
+    if (!builtin_cmd(argv)) {         //非shell内置命令时，创建子进程
+        //针对SIGINT,SIGTSTP,SIGCHLD三种信号进行屏蔽，创建进程的代码段不会被这些信号打断
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGCHLD);
+        sigaddset(&mask, SIGINT);
+        sigaddset(&mask, SIGTSTP);
+        sigprocmask(SIG_BLOCK, &mask, NULL);
+
+        pid = Fork();
+
+        if (pid == 0) {                           //子进程
+            //子进程已创建，可重新开始使用信号
+            sigprocmask(SIG_UNBLOCK, &mask, NULL);
+            //创建进程组job，将当且进程放入
+            if (setpgid(0, 0) < 0)
+                unix_error("setpgid error");
+            //now load and run the program in the new job, 开始运行
+            if (execve(argv[0], argv, environ) < 0) {
+                printf("%s: command not found\n", argv[0]);     //路径找不到
+                exit(0);
+            }
+        } else {                                   //父进程
+            //将子进程、进程组pid添加进进程表后，可重新开始使用信号
+            addjob(jobs, pid, (bg == 1 ? BG : FG), cmdline);        //Add a job to the job list
+            sigprocmask(SIG_UNBLOCK, &mask, NULL);
+
+            //特判前后台
+            if (!bg) {
+                waitfg(pid);
+            } else {
+                printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);     //提示用户：放入后台
+            }
+        }
+
+    }
+
+    return;
+}
+```
 
 
 
+builtin_cmd函数的实现
+
+> builtin_cmd - If the user has typed a built-in command then execute it immediately. 
+
+```c
+int builtin_cmd(char **argv)        //当是shell内置命令时，执行它自己的
+{
+    if (!strcmp(argv[0], "quit"))    //equal
+        exit(0);
+    if (!strcmp(argv[0], "&"))       //ignore singleton &
+        return 1;
+    if (!strcmp(argv[0], "bg") || !strcmp(argv[0], "fg")) {
+        do_bgfg(argv);              //前台后台统一处理
+        return 1;
+    }
+    if (!strcmp(argv[0], "jobs")) {
+        listjobs(jobs);
+        return 1;
+    }
+    return 0;     /* not a builtin command */
+}
+```
+
+
+
+do_bgfg函数的实现
+
+> do_bgfg - Execute the builtin bg and fg commands
+
+```c
+void do_bgfg(char **argv) {
+    struct job_t *job;     //存放获取到的job地址
+    int pid = -1, jid = -1;
+
+    if (argv[1] == NULL) {
+        printf("%s command requires PID or %%jobid argument\n", argv[0]);
+        return;
+    }
+
+    if (sscanf(argv[1], "%%%d", &jid) || sscanf(argv[1], "%d", &pid)) {
+        if (jid != -1) {        //jid
+            job = getjobjid(jobs, jid);             //jobs: job list
+            if (job == NULL) {
+                printf("%%%d: No such job\n", jid);
+            }
+                //bg success：[job_id] (pid) <argv>
+                //fg success: Job [job_id] (pid) stopped by signal <xxx信号编号>
+                //使用 kill(-(job->pid), SIGCONT)：发送信号SIGCONT给进程组abs(pid)
+                //SIGCONT:用于通知暂停的进程继续
+            else {
+                pid = job->pid;
+                if (!strcmp(argv[0], "bg")) {                 //bg
+                    if (kill((pid), SIGCONT) < 0)
+                        unix_error("kill (bg) error");
+                    job->state = BG;
+                    printf("[%d] (%d) %s\n", job->jid, job->pid, job->cmdline);
+                } else {                                       //fg
+                    if (kill((pid), SIGCONT) < 0)
+                        unix_error("kill (bg) error");
+                    job->state = FG;
+                    waitfg(pid);
+                }
+            }
+        } else {               //pid
+            job = getjobpid(jobs, pid);
+            if (job == NULL) {
+                printf("(%d): No such process\n", pid);
+            }
+                //bg success：[job_id] (pid) <argv>
+                //fg success: Job [job_id] (pid) stopped by signal <xxx信号编号>
+                //使用 kill(-(job->pid), SIGCONT)：发送信号SIGCONT给进程组abs(pid)
+                //SIGCONT:用于通知暂停的进程继续
+            else {
+                jid = job->jid;
+                if (!strcmp(argv[0], "bg")) {                 //bg
+                    if (kill((pid), SIGCONT) < 0)
+                        unix_error("kill (bg) error");
+                    job->state = BG;
+                    printf("[%d] (%d) %s\n", job->jid, job->pid, job->cmdline);
+                } else {                                       //fg
+                    if (kill((pid), SIGCONT) < 0)
+                        unix_error("kill (bg) error");
+                    job->state = FG;
+                    waitfg(pid);
+                }
+            }
+        }
+    } else {
+        printf("%s: argument must be a PID or %%jobid\n", argv[0]);
+    }
+
+
+    return;
+}
+```
+
+
+
+waitfg函数的实现
+
+> waitfg - Block until process pid is no longer the foreground process
+
+```c
+void waitfg(pid_t pid)      // 目的：在进程处于前台期间，可以被任何信号打断
+{
+    sigset_t mask, prev;
+    sigemptyset(&mask);
+    while (fgpid(jobs) > 0) {        //不断检测前台是否有子进程
+        sigprocmask(SIG_SETMASK, &mask, &prev);      //集合设为空，表示任意信号都能够对此进程阻塞
+        sleep(1);
+        sigprocmask(SIG_SETMASK, &prev, NULL);
+    }
+    return;
+}
+```
+
+
+
+sigchld_handler的实现
+
+> sigchld_handler：The kernel sends a SIGCHLD to the shell whenever
+>
+> - a child job terminates (becomes a zombie)
+> -  or stops because it received a SIGSTOP or SIGTSTP signal. 
+> - The handler reaps all available zombie children；
+> - but doesn't wait for any other currently running children to terminate.  
+
+主要作用：将僵死进程（terminated）回收delete掉，并且要判断这个进程是正常结束还是SIGINT或是SIGTSTP中断；此外，父进程在handler中不会等待其它正在运行的子进程终止，每次仅回收一个
+
+```c
+void sigchld_handler(int sig) //reap the zombie child: 回收所有的terminate状态的子进程
+{
+    int olderror = errno;
+    pid_t pid;
+    int status;
+    sigset_t mask, prev;
+
+    sigfillset(&mask);
+
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0)   //父进程获取唯一的终止的子进程pid
+    {
+        if (WIFEXITED(status)) {      //若子进程是正常终止的
+            sigprocmask(SIG_BLOCK, &mask, &prev);
+            deletejob(jobs, pid);
+            sigprocmask(SIG_BLOCK, &prev, NULL);
+        }
+        else if (WIFSIGNALED(status)){      //若子进程是被信号终止的
+            struct job_t *job = getjobpid(jobs, pid);
+            sigprocmask(SIG_BLOCK, &mask, &prev);
+            // WTERMSIG(status):终止宏(int)
+            printf("Job [%d] (%d) terminated by signal %d\n", job->jid, job->pid, WTERMSIG(status));
+            deletejob(jobs, pid);
+            sigprocmask(SIG_BLOCK, &prev, NULL);
+        }
+        else{           //若子进程是被信号暂停的
+            struct job_t *job = getjobpid(jobs, pid);
+            sigprocmask(SIG_BLOCK, &mask, &prev);
+            // WSTOPSIG(status):暂停宏(int)
+            printf("Job [%d] (%d) stopped by signal %d\n", job->jid, job->pid, WSTOPSIG(status));
+            job->state= ST;         //设置job状态为stop
+            sigprocmask(SIG_BLOCK, &prev, NULL);
+        }
+    }
+
+    return;
+}
+```
+
+
+
+
+
+sigint_handler的实现
+
+> The kernel sends a SIGINT to the shell whenver the user types ctrl-c at the keyboard.  Catch it and send it along to the foreground job.
+
+主要作用：收到ctrl+C后，捕获它并将它送至前台进程，终止前台进程
+
+```c
+void sigint_handler(int sig) {
+    //获取前台进程pid
+    int pid = fgpid(jobs);
+    int jid = pid2jid(pid);
+    sigset_t mask, prev;
+
+    sigfillset(&mask);
+    if(pid){
+        sigprocmask(SIG_BLOCK, &mask, &prev);
+        printf("Job [%d] (%d) terminated by signal 2\n",jid,pid);
+        deletejob(jobs,pid);
+        sigprocmask(SIG_SETMASK, &prev, NULL);
+    }
+
+    return;
+}
+```
+
+
+
+
+
+sigtstp_handler的实现
+
+> The kernel sends a SIGTSTP to the shell whenever the user types ctrl-z at the keyboard. Catch it and suspend the foreground job by sending it a SIGTSTP.
+
+主要作用：收到ctrl+Z后，捕获它并将它送至前台进程，暂停前台进程
+
+```c
+void sigtstp_handler(int sig) {
+    //获取前台进程pid
+    int pid = fgpid(jobs);
+    int jid = pid2jid(pid);
+    sigset_t mask, prev;
+
+    sigfillset(&mask);
+    if(pid){
+        sigprocmask(SIG_BLOCK, &mask, &prev);
+        printf("Job [%d] (%d) terminated by signal 20\n",jid,pid);
+        (*getjobpid(jobs,pid)).state = ST;      //设置job状态为stop
+        sigprocmask(SIG_SETMASK, &prev, NULL);
+    }
+
+
+    return;
+}
+```
 
 
 
@@ -221,6 +510,10 @@ fi
 
 所有样例一起跑	  ./execute.sh
 
+注1：进程pid由操作系统自由分配，可能不一样，不由理会即可
+
+注2：从test08开始，一定要自己手动输入CTRL + C才能结束，进行上述单元调试即可
+
 ```bash
 #! /bin/bash
 
@@ -252,4 +545,18 @@ done
 ```
 
 
+
+
+
+Reference: 
+
+[1] CS:APP:Lab6-*ShellLab* from 周小伦 https://www.zhihu.com/search?type=content&q=shelllab
+
+[2] shlab.pdf from CMU
+
+[3] lab6-shell.pdf from HIT
+
+[4] 《CSAPP》第八章
+
+[5] CSAPP实验shell lab from 林恩 https://zhuanlan.zhihu.com/p/89224358
 

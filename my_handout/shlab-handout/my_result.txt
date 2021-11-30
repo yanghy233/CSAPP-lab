@@ -1,0 +1,12 @@
+5c5
+< [1] (7561) ./myspin 4 &
+---
+> [1] (7570) ./myspin 4 &
+7c7
+< Job [2] (7563) terminated by signal 2
+---
+> Job [2] (7572) terminated by signal 2
+9c9
+< [1] (7561) Running ./myspin 4 &
+---
+> [1] (7570) Running ./myspin 4 &
