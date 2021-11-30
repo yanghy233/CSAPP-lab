@@ -20,12 +20,8 @@
 <<<<<<< HEAD
 
 &nbsp;
+&nbsp;
 
-====
-&nbsp; 
-&nbsp; 
-
->>>>>>> 6945cef9b496d88c42dc6174b57542ac30863ca4
 ##### 1.2 Basic Unix Operation
 
 **1. 在指令末尾 + &：代表将指令丢到后台bg中，此时bash会给予这个指令一个job number**
